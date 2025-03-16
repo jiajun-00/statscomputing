@@ -1,0 +1,220 @@
+---
+title: 'StatComp Project 1:  3D printer materials estimation'
+author: "JIAJUN LI (s2265910)"
+output:
+  html_document:
+    number_sections: yes
+  pdf_document:
+    number_sections: yes
+header-includes:
+  - \newcommand{\bm}[1]{\boldsymbol{#1}}
+  - \newcommand{\mat}[1]{\begin{bmatrix}#1\end{bmatrix}}
+---
+
+```{r setup, include = FALSE}
+# Modify this setup code chunk to set options
+# or add extra packages etc if needed.
+# See the project instructions for more details
+# on what code to show, and where/how.
+# Set default code chunk options
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE
+)
+
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(mvtnorm))
+theme_set(theme_bw())
+
+# To give the same random number sequence every time the document is knit:ed,
+# making it easier to discuss the specific numbers in the text:
+set.seed(12345L)
+```
+
+```{r code=readLines("code.R"), eval=TRUE, echo=FALSE}
+# Do not change this code chunk
+# Load function definitions
+source("code.R")
+```
+# The data
+
+```{r echo=FALSE}
+# load filament
+load(file='filament1.rda')
+```
+
+The filament1 data frame is
+```{r echo=FALSE}
+filament1
+```
+
+
+The plot of Variability of Actual Weight Across Materials. From the plot, we can see that the height of red material's box is taller than others showing that the variability of red material is greatest. The height of Magenta and Neon pink is lower than others showing that the variability of Magenta and Neon pink material is least. The variability of black and green material are similar and the varibility of neon blue is greater than black and green material. 
+
+
+```{r echo=FALSE}
+ggplot(filament1, aes(x = Material, y = Actual_Weight, fill = Material)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "Variability of Actual Weight Across Materials")+
+  scale_fill_manual(values = c("black", "green", "magenta", "blue", "pink", "red"))
+```
+
+From the graph below, we can see that the Actual Weight tends to increase as the CAD Weight increases. Based on the graph, it can be inferred that there is a general agreement between CAD Weight and Actual Weight across the materials. From this graph, it is also possible to see that the variability of red material is greatest. The variability of CAD weight in the middle is greater than two tails.
+```{r echo=FALSE}
+# Scatter plot for Actual_Weight vs CAD_Weight, colored by Material
+ggplot(filament1, aes(x = CAD_Weight, y = Actual_Weight, color = Material)) +
+  geom_point() +
+  theme_bw() +
+  labs(title = "Actual Weight vs CAD Weight, Colored by Material")+
+  scale_colour_manual(values = c("black", "green", "magenta", "blue", "pink", "red"))
+```
+
+
+# Classical estimation 
+The 90% confidence intervals is
+```{r echo=FALSE}
+
+fit_A <- filament1_estimate(filament, "A")
+fit_B <- filament1_estimate(filament, "B")
+
+lower <- c(0,0,0,0,0,0,0,0)
+upper <- c(0,0,0,0,0,0,0,0)
+expectation <- c(0,0,0,0,0,0,0,0)
+
+invA <- solve(fit_A$hes)
+invB <- solve(fit_B$hes)
+
+for (i in 1:4) {
+  lower[i] <- fit_A$par[i] - 1.645 * sqrt(invA[i,i])
+  upper[i] <- fit_A$par[i] + 1.645 * sqrt(invA[i,i])
+  expectation[i] <- fit_A$par[i]
+  lower[i+4] <- fit_B$par[i] - 1.645 * sqrt(invB[i,i])
+  upper[i+4] <- fit_B$par[i] + 1.645 * sqrt(invB[i,i])  
+  expectation[i+4] <- fit_B$par[i]
+}
+
+CI <- c("beta1 A",
+        "beta2 A",
+        "beta3 A", 
+        "beta4 A", 
+        "beta1 B", 
+        "beta2 B", 
+        "beta3 B", 
+        "beta4 B")
+
+lu <- cbind(CI, lower, expectation,  upper)
+
+knitr::kable(lu) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+The confidence interval for a parameter estimate is a range of values that is likely to contain the true value of the parameter. The width of the confidence interval gives us an idea of the precision of the estimate: narrower intervals suggest more precise estimates. From the table above, we can see 4 beta value with two different models A and B. 
+
+Beta1 model A: The confidence interval ranges from -0.3006 to 0.1219, with the expectation at -0.0893. The width of this interval is 0.4225, which suggests some uncertainty in the estimate of this parameter. 
+
+Beta1 model B: The CI ranges from -0.2215 to -0.1010, with the expectation at -0.1613, and the width is 0.1205, which shows a reasonable amount of uncertainty.
+
+Beta2 model A: The CI is from 1.0695 to 1.0889, with the expectation at 1.0792, and a narrow width of 0.0194. This indicates a precise estimate of the parameter.
+
+Beta2 model B: The CI is from 1.0752 to 1.0906, with the expectation at 1.0829, and a narrow width of 0.0154, indicating a precise estimate.
+
+Beta3 model A: This has a CI from -2.4715 to -1.3360, expectation at -1.9038, and a width of 1.1355. The relatively large width indicates a higher uncertainty in this estimate.
+
+Beta3 model B: This has a CI from -98.0486 to 71.0457, expectation at -13.5015, and a very wide width of 169.0943. This incredibly large width indicates extreme uncertainty and suggests that the parameter may not be well-estimated or that the model is not appropriate.
+
+Beta4 model A: The CI is from 0.0410 to 0.0704, with the expectation at 0.0557, and the width is 0.0294, indicating moderate precision.
+
+Beta4 model B: The CI is from -6.8645 to -6.3627, with the expectation at -6.6136, and a width of 0.5018, indicating some uncertainty but not as extreme as beta3 model B.
+
+In summary, Model A seems to provide more precise and potentially more reliable parameter estimates than Model B, judging by the width of the confidence intervals. Model B, particularly with its beta3 parameter, shows signs that it may not be the best model for the data.  
+
+# Bayesian estimation
+```{r echo=FALSE}
+pm <- posterior_mode(c(0,0,0,0), filament1$CAD_Weight, filament1$Actual_Weight, c(1,1,1,1))
+```
+
+The $\mu$ of mode is
+```{r echo=FALSE}
+mu <- pm$mode
+theta <- c("theta1", "theta2", "theta3", "theta4")
+mu_df <- data.frame(theta, mu)
+knitr::kable(mu_df) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+The covariance matrix S is 
+```{r echo=FALSE}
+beta <- c("theta1", "theta2", "theta3", "theta4")
+new_data <- cbind(beta, pm$S)
+knitr::kable(new_data, col.names = c("beta","theta1", "theta2", "theta3", "theta4")) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+The empirical weighted CDFs together with the unweighted CDFs for each parameter is
+```{r echo=FALSE}
+params <- c(1, 1, 1, 1)
+importance_s <- do_imprtance(10000,pm$mode, pm$S, filament1$CAD_Weight, filament1$Actual_Weight, params)
+
+# create new data frame
+ndf <- importance_s %>% pivot_longer(cols = c("beta1", "beta2", "beta3", "beta4"), names_to = "beta", values_to = "value") 
+
+ggplot(ndf) +
+  ylab("CDF") +
+  stat_ewcdf(aes(value, weights = exp(normalized_log_weights), color = "weighted")) +
+  stat_ewcdf(aes(value, weights = 1, color = "unweighted")) +
+  facet_wrap(vars(beta), ncol = 2, scales = "free")  +
+  scale_colour_manual( "Type", values = c("weighted" = "orange", "unweighted" = "black"))
+```
+
+
+For beta1, the CDF rises steeply and the weighted and unweighted lines are close to each other expect the middle part with a jump at about value = -0.14, suggesting that the weighting has some effect on the distribution. Beta2 has a much narrower range of values and the weighted and unweighted lines are more close, suggesting similar distributions for both types of data. Beta3's CDF is a step function, indicating that there are very few distinct values that beta3 takes on. The step function suggests that the data is discrete or categorical in nature, or possibly that there is a large amount of data at one specific value. The CDF jumps to 1 very quickly and is highly skewed, which implies that there's a high concentration of data points at a certain value. Beta4's CDF shows a more gradual rise than the others, indicating a wider spread of values. The range of values is very small. There is some small jumps in the weighted CDF, but not very large.
+
+
+The resulting 90% credible intervals is
+```{r echo=FALSE}
+df_CI <- ndf %>% group_by(beta)
+df_CI <- summarise(df_CI, make_CI(value,weights = exp(normalized_log_weights), probs = c(0.05, 0.95)))
+knitr::kable(df_CI) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+```
+
+
+```{r echo=FALSE}
+pred <- 
+  importance_s %>%
+  cross_join(data.frame(x = seq(0,100, by = 1))) %>%
+  mutate(mu = beta1 + beta2 * x,
+         sigma = sqrt(beta3 + beta4 * x^2),
+         weight = exp(normalized_log_weights)) %>%
+  group_by(x)%>%
+  summarise(mu_pred = sum(weight *mu),
+            sigma_pred = sqrt(sum(weight * (sigma^2 + (mu - mu_pred)^2))))
+
+ggplot(pred) +
+  geom_ribbon(aes(x= x, ymin = mu_pred - 2*sigma_pred, ymax = mu_pred + 2*sigma_pred), fill = "grey80") +
+  geom_line(aes(x, mu_pred)) +
+  geom_point(data = filament1, aes(CAD_Weight, Actual_Weight)) +
+  labs(x = "CAD weight", y = "Actual weight", title = "Predict intervals and observed Data")
+```
+
+
+From the graph, the prediction intervals agree with the observed data, since nearly all the observed points fall in the prediction intervals. Additionally, the functional form of the standard deviation model seems to fit the data well.
+
+
+```{r echo=FALSE}
+ggplot(ndf) +
+  geom_point(aes(value, normalized_log_weights)) +
+  facet_wrap(vars(beta), ncol = 2, scales = "free") +
+  labs(title ="Normalized logarithm weights against beta")
+```
+
+Here, we plot the normalized logarithm weights against each $\beta_i$ parameter. From the graph, we can see that the weights for $\beta_1, \beta_2$ and $\beta 4$ are nearly spread equally in the given range of value. However, for $\beta_3$, some very large weights are generated for some small values, which shows that the Gaussian approximation is worse for $\beta_3$. This also shows a bad Gaussian approximation for $\theta_3$. Thus, Gaussian approximation's density might have large difference with the exact posterior density. 
+
+# Code appendix
+
+```{r code=readLines("code.R"), eval=FALSE, echo=TRUE}
+# Do not change this code chunk
+```
