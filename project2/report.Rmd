@@ -1,0 +1,210 @@
+---
+title: 'Project 2'
+author: "JIAJUN LI (s2265910)"
+output:
+  html_document:
+    number_sections: yes
+  pdf_document:
+    number_sections: yes
+header-includes:
+  - \newcommand{\bm}[1]{\boldsymbol{#1}}
+  - \newcommand{\mat}[1]{\begin{bmatrix}#1\end{bmatrix}}
+---
+
+```{r setup, include = FALSE}
+# Modify this setup code chunk to set options
+# or add extra packages etc if needed.
+# See the project instructions for more details
+# on what code to show, and where/how.
+
+# Set default code chunk options
+knitr::opts_chunk$set(
+  echo = TRUE,
+  eval = TRUE
+)
+
+
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(mvtnorm))
+theme_set(theme_bw())
+
+# To give the same random number sequence every time the document is knit:ed,
+# making it easier to discuss the specific numbers in the text:
+set.seed(12345L)
+```
+
+```{r code=readLines("code.R"), eval=TRUE, echo=FALSE, results='hide'}
+# Do not change this code chunk
+# Load function definitions
+source("code.R")
+```
+# Part 1: 3D printer
+
+```{r echo=FALSE}
+#load the filament1 data
+load(file='filament1.rda')
+```
+
+## Question 1
+In this question we need to use filament1_predict function to get the probabilistic predictions of Actual_Weight and prediction intervals of two models with significance level 5%. 
+```{r}
+# probabilistic predictions of Actual_Weight using model A with significance level of 5%
+pda <- filament1_predict(filament1, filament1, "A", 0.05)
+
+# probabilistic predictions of Actual_Weight using model B with significance level of 5%
+pdb <- filament1_predict(filament1, filament1, "B", 0.05)
+```
+
+
+
+To inspect the predictions visually, we can plot the graph.
+```{r echo=FALSE, warning = FALSE}
+# Combine filament1_data with predictions_A for Model A
+combined_data_A <- filament1 %>%
+  bind_cols(pda) %>%
+  mutate(Model = "A") # Adding a column to distinguish the model in plots
+
+# Combine filament1_data with predictions_B for Model B
+combined_data_B <- filament1%>%
+  bind_cols(pdb) %>%
+  mutate(Model = "B") # Adding a column to distinguish the model in plots
+
+# Combine both datasets for a unified plot
+combined_data <- bind_rows(combined_data_A, combined_data_B)
+
+# use ggplot to inspect the predictions visually
+ggplot(combined_data)+
+  geom_ribbon(aes(x = CAD_Weight, ymin = lwr, ymax = upr, fill = Model), alpha = 0.6)+
+  geom_smooth(aes(x = CAD_Weight, y = mean, color = Model), method="loess", formula = 'y ~ x',lwd = 0.6)+
+  geom_point(aes(x = CAD_Weight, y = Actual_Weight)) +
+  scale_colour_manual(values = c("A" = "black", "B" = "Deep Sky Blue 1")) + 
+  scale_fill_manual(values = c("A" = "Gray70 ", "B" = "Cyan 1")) +
+  labs(title = "Predictions of Actual Weight using model A and B")+
+  xlab("CAD Weight") +
+  ylab("Actual Weight")
+  
+```
+
+  Above graph shows the probabilistic predictions of Actual Weight using two estimate model A and B, and prediction intervals of two models with significance level 5% visually. The x-axis is CAD Weights and y-axis is Actual Weight. 
+  
+  The black line in the graph is the prediction of Actual Weight using model A. The blue line in the graph is the prediction of Actual Weight using model B. From the graph, we can see that two prediction line are almost the same with the blue line a little bit higher than the black line, which shows that the probabilistic predicted mean values of Actual Weight using two estimate model A and B are nearly the same. 
+  
+  The prediction intervals of two models are both wider as the value of CAD Weight increasing. This shows standard deviation of both model increasing as the value of CAD Weight increasing meaning that the predictions for higher CAD Weight are less certain than the predictions for lower CAD Weight. However, the prediction intervals of two models with significance level 5% seems a more explicit difference as CAD Weight larger than about 65. As CAD Weight larger than about 65, the gray interval is wider than the blue interval showing that the prediction interval of model A is wider than the prediction interval of model B. This also shows that the probabilistic predicted standard deviation of model A is larger than the one of model B as CAD Weight larger than about 65.
+
+
+## Qestion 3
+
+We use leave1out function to obtain the leave-one-out prediction means, standard deviasions, and prediction scores. 
+```{r warning = FALSE}
+# leave-one-out prediction for model A
+ltA <- leave1out(filament1, "A", 0.05)
+# leave-one-out prediction for model B
+ltB <- leave1out(filament1, "B", 0.05)
+```
+
+The average leave-one-out scores $S(F_i, y_i)$ for each model and type of score for filament1 data is
+
+```{r echo=FALSE, warning = FALSE}
+model <- c("A", "B")
+# calculate the average score
+average_squared_score <- c(mean(ltA$score_lt_se), mean(ltB$score_lt_se))
+average_ds_score <- c(mean(ltA$score_lt_ds), mean(ltB$score_lt_ds))
+average <- data.frame(model, average_squared_score, average_ds_score)
+knitr::kable(average) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+The average Squared Error Score measures the average of the squares of the errors. A lower score typically indicates a better fit of the model to the data. In this case, average squared error score is 1.841734 for Model A and 1.841995 for Model B. Both models have very close scores, with Model A slightly lower, implying a marginally better fit or prediction accuracy in terms of the squared metric.
+
+The DS score is used in the context of probabilistic forecasting and evaluates the accuracy and calibration of predictive distributions. It is calculated based on the variance and the squared difference between the forecast and the actual value. Unlike typical scoring rules where a lower score is better, a lower DS score specifically indicates not just accuracy but also a more confident forecast. In this table, average DS score is 1.128348 for Model A and 0.939715 for Model B. Thus, Model B has a significantly lower DS score, indicating that it is likely making more accurate and confident probabilistic forecasts than Model A.
+
+While Model A performs slightly better on the average squared score (which could reflect a lower mean squared error), Model B is substantially better in terms of the average Dawid-Sebastiani score, suggesting that Model B's probabilistic forecasts are more accurate and confident. Assessing which prediction model is better is unclear as it depends on what attributes of the prediction distribution are important.
+
+
+## Question 4
+In this section we need to construct a Monte Carlo estimate of the p-value to test the exchangeability between model predictions from A and B against the alternative hypothesis that B is better than A.
+
+Here, we use test statistic $\frac{1}{N} \sum_{i=1}^N (S_i^A - S_i^B)$. For this particular test statistic, we can first compute the pairwise score differences and then generate randomisation samples by sampling random sign changes. Then, we can compute the test statistic for each randomly altered set of values and compare with the original test statistic.
+
+The p-value is the probability that under the null hypothesis, we would observe a test statistic as extreme as or more extreme than the observed statistic. A low p-value (typically < 0.05) would lead us to reject the null hypothesis in favor of the alternative, suggesting that model B is indeed better. 
+
+We can do the approach above by
+```{r warning = FALSE}
+# score difference of two model
+score_diff <- data.frame(se = ltA$score_lt_se - ltB$score_lt_se,
+                         ds = ltA$score_lt_ds - ltB$score_lt_ds)
+
+# test statistic 
+statistic0 <- score_diff %>% summarise(se = mean(se), ds = mean(ds))
+
+# number of iterations
+J <- 10000
+
+# initialize the statistic data frame
+statistic <- data.frame(se = numeric(J), ds = numeric(J))
+
+# loop J times
+for(loop in seq_len(J)) {
+  # generate randomisation samples by sampling random sign changes
+  random_sign <- sample(c(-1,1), size = nrow(score_diff), replace = TRUE)
+  statistic[loop,] <- score_diff %>% summarise(se = mean(random_sign * se),
+                                               ds = mean(random_sign * ds))
+}
+
+# Compute the test statistic for each randomly altered set of values and compare with the original test statistic
+p_values <- 
+  statistic %>%
+  summarise(se = mean (se > statistic0$se),
+            ds = mean (ds > statistic0$ds))
+```
+
+Then, we get the p-value for squared error and dawid-sebastiani scores, which is 
+```{r echo=FALSE, warning = FALSE}
+knitr::kable(p_values) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+The p-values for the squared error and Dawid-Sebastiani score, estimated using Monte Carlo simulations, are approximately 0.4989 and 0.0436, respectively. 
+
+For squared error scores, it is 0.4989. With this p-value, we cannot reject the null hypothesis of exchangeability. There isn't strong evidence to suggest that model B is better than model A based on the p-value of squared error scores. This result also means that we cannot reject the null hypothesis of exchangeability with respect to accuracy of two model.   
+
+For DS scores, the p-value is 0.0436, which is smaller than 0.05 showing that we need to reject the null hypothesis of exchangeability. In DS score, we take predictive variance into consideration instead of just the squared error. This results shows that Model B's probabilistic forecasts are more accurate and confident.
+
+Monte Carlo Standard Errors are a measure used to assess the precision of estimates obtained through Monte Carlo simulations.The smaller the MCSE, the more reliable the estimate is considered to be. In this approach, the Monte Carlo standard errors is
+```{r echo=FALSE, warning = FALSE}
+knitr::kable(sqrt(p_values * (1- p_values)/J)) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+From the table, we can see that the Monte Carlo standard errors are 0.005 and 0.002042 for squared error and ds scores respectively. Thus, two standard errors are very small showing that the estimate is considered to be reliable.
+
+From p-values of two scores, we cannot conclude that one model is definitively better at predicting than the other. To assess the null hypothesis test, we still need to consider what attributes of the prediction distribution are important. If the squared error(accuracy) is more important, we cannot reject the null hypothesis of exchangeability. If predictive variance(confidence) is more important in comparison, we can reject the null hypothesis of exchangeability. This results can also be supported from the previous question. In Q1, the two prediction line are almost the same with little difference in prediction intervals. In Q2, two type of score show two different results with one is almost the same and other is little different.    
+
+# Part 2: Archaeology in the Baltic sea
+
+The results of running estimate(y=c(237,256), xi=1/1001, a=0.5, b=0.5, K=10000) is
+```{r warning = FALSE, echo=FALSE}
+# get the Monte Carlo estimate
+es <- estimate(c(237,256), xi = 1/1001, a =0.5, b = 0.5, K = 10000)
+knitr::kable(es) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+Here, the function estimate that takes inputs y, xi, a, b, and K and implements the Monte Carlo integration method in Q2 to approximate $p_y (y), E(N|y)$, and $E(\phi|y)$. 
+In the above example, we use y= (237, 256) showing that the number of left femur is 237 and the number of right femur is 256. Here, in the example, $\xi$ is $\frac{1}{1001}$, which means the expectation of the prior distribution $Geom(\xi)$ is 1000. This is based on our simple model that the archaeologist believed that around 1000 individuals were buried. The a and b are both 0.5, which is the prior distribution of finding the femur with given number of total number of people buried. The a and b have same value showing that they would find around half on the femurs in the model. In statistic methodology, we know that the low value of a and b has little effect in shaping the posterior, so our model will base on the sampling.
+
+The value of approximate $p_y (y)$ is about $7.921036 \cdot e^{-6}$, which is very small. This could represent the estimated marginal likelihood of observing the data $p_y (y)$, which is a probability measure. The small value suggests that, under the model and priors chosen, the observed data are quite unlikely. This could be due to a model that does not fit well or very informative priors that do not match the data well.
+
+The value of $E(N|y)$ is 981.9492, which is the Monte Carlo estimate of the posterior expectation of the total number of people buried $E(N|y)$. This estimate is lower than the 1000 individuals initially believed by the archaeologist to be buried, but it's in the same ballpark. It suggests that, based on the model and the data (the counts of left and right femurs), there might be slightly fewer individuals buried than previously thought.
+
+The value of $E(\phi|y)$ is approximately 0.3741221, which is the Monte Carlo estimate of the posterior expectation of the probability of finding a femur $E(\phi|y)$. Given that the prior belief was that this probability would be close to 1/2, the estimated value is somewhat lower. This could indicate that the probability of finding a femur is less than what was expected prior to the analysis. It could reflect issues such as incomplete recovery of remains or other site-specific factors that reduced the likelihood of finding femurs.
+
+In summary, the results seem to suggest that the actual number of individuals buried might be slightly lower than expected, and the probability of finding a femur is also lower than the anticipated 50%. Furthermore, this simple model might be improved by adding more additional data affecting the model or finding alternative models. 
+
+# Code appendix
+
+```{r code=readLines("code.R"), eval=FALSE, echo=TRUE}
+# Do not change this code chunk
+```
